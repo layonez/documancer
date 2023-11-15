@@ -1,3 +1,6 @@
+import { processDoc, processText } from './worker';
+import { Message } from 'node-telegram-bot-api';
+
 /**
  * Welcome to Cloudflare Workers! This is your first worker.
  *
@@ -9,24 +12,43 @@
  */
 
 export interface Env {
-	// Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
-	// MY_KV_NAMESPACE: KVNamespace;
-	//
-	// Example binding to Durable Object. Learn more at https://developers.cloudflare.com/workers/runtime-apis/durable-objects/
-	// MY_DURABLE_OBJECT: DurableObjectNamespace;
-	//
-	// Example binding to R2. Learn more at https://developers.cloudflare.com/workers/runtime-apis/r2/
-	// MY_BUCKET: R2Bucket;
-	//
-	// Example binding to a Service. Learn more at https://developers.cloudflare.com/workers/runtime-apis/service-bindings/
-	// MY_SERVICE: Fetcher;
-	//
-	// Example binding to a Queue. Learn more at https://developers.cloudflare.com/queues/javascript-apis/
-	// MY_QUEUE: Queue;
+	TELEGRAM_API_KEY: string;
+	PINECONE_ENVIRONMENT: string;
+	PINECONE_API_KEY: string;
+	OPENAI_API_KEY: string;
 }
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		return new Response('Hello World!');
+		if (request.method === 'POST') {
+			const payload = (await request.json()) as unknown;
+
+			// Type Guard: Check whether payload is of the expected type
+			if (typeof payload === 'object' && payload !== null && 'message' in payload) {
+				const msg = payload.message as Message;
+				const chatId = msg.chat.id;
+
+				try {
+					const messageText = msg.text;
+
+					if (msg.document) {
+						processDoc(msg.document, chatId, env);
+					} else {
+						processText(msg, chatId, env);
+					}
+
+					if (messageText === '/start') {
+						await this.sendMessage(env.TELEGRAM_API_KEY, chatId, 'Welcome to the bot!');
+					}
+				} catch (error) {
+					this.sendMessage(env.TELEGRAM_API_KEY, chatId, `Something went wrong :(\n\n${error}`);
+				}
+			}
+		}
+		return new Response('OK');
+	},
+	async sendMessage(apiKey: string, chatId: number, text: string) {
+		const url = `https://api.telegram.org/bot${apiKey}/sendMessage?chat_id=${chatId}&text=${text}`;
+		const data = await fetch(url).then(resp => resp.json());
 	},
 };
