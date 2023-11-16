@@ -1,13 +1,11 @@
-FROM node:alpine AS build
+FROM node:lts-bullseye-slim AS build
 
 WORKDIR /usr/src/app
 
-COPY package*.json ./
+COPY . .
 
 RUN npm i
 RUN npm run build
-
-COPY . .
 
 EXPOSE 8080
 
