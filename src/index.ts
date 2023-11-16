@@ -15,9 +15,15 @@ export const processTelegramWebHook = async (message: Message): Promise<Response
 		const messageText = message.text;
 
 		if (message.document) {
-			await processDoc(message.document, chatId, message.message_id);
+			console.log('processing document');
+
+			const results = await processDoc(message.document, chatId, message.message_id);
+			results.forEach(async res => await reply(process.env.TELEGRAM_API_KEY, chatId, res));
 		} else {
-			await processText(message, chatId);
+			console.log('processing text');
+
+			const results = await processText(message, chatId);
+			results.forEach(async res => await reply(process.env.TELEGRAM_API_KEY, chatId, res));
 		}
 
 		if (messageText === '/start') {

@@ -149,5 +149,5 @@ const getSummaryFromLlm = async (base64Images: string[] | Uint8Array[]) => {
 	});
 	console.log(response);
 
-	return response.choices[0].message.content;
+	return response.choices[0].message.content || '';
 };
