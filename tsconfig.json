@@ -1,12 +1,24 @@
 {
+	"ts-node": {
+		"compilerOptions": {
+			"module": "NodeNext",
+			"moduleResolution": "Node"
+		}
+	},
 	"compilerOptions": {
-		"noEmit": true,
-		"module": "esnext",
-		"target": "esnext",
+		"noEmit": false,
+		"module": "NodeNext",
+		"target": "ESNext",
 		"lib": ["esnext"],
 		"strict": true,
-		"moduleResolution": "node",
-		"types": ["@cloudflare/workers-types"]
+		"moduleResolution": "NodeNext",
+		"types": ["node", "express"],
+		"sourceMap": true,
+		"outDir": "./build",
+		"baseUrl": ".",
+		"skipLibCheck": true,
+		"typeRoots": ["./node_modules/@types"]
 	},
+	"include": ["src/**/*"],
 	"exclude": ["node_modules", "dist", "test"]
 }

@@ -1,12 +1,11 @@
-// 1. Import required modules
 import { OpenAIEmbeddings } from 'langchain/embeddings/openai';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
-import { writeFileSync } from 'fs';
 import OpenAI from 'openai';
-import { convert } from 'pdf-img-convert';
+// import { convert } from 'pdf-img-convert';
 import { PineconeClient, ScoredPineconeRecord, ScoredVector } from '@pinecone-database/pinecone';
-import { Document } from 'langchain/dist/document';
-import { Env } from '.';
+import { convertPDFBinaryDataToBase64Image } from './utils.js';
+import type { Document } from 'langchain/document';
+import { DocumentMetadata, PdfType } from './worker.js';
 
 export type Vector = ScoredPineconeRecord<{
 	loc: string;
@@ -18,9 +17,8 @@ export type Vector = ScoredPineconeRecord<{
 export const updatePinecone = async (
 	client: PineconeClient,
 	indexName: string,
-	docs: Document<Record<string, any>>[],
-	pdfBuffer: Buffer,
-	env: Env
+	doc: Document<PdfType>,
+	pdfBuffer: Buffer
 ) => {
 	const result = [];
 
@@ -29,87 +27,85 @@ export const updatePinecone = async (
 	const index = client.Index(indexName);
 	// 4. Log the retrieved index name
 	console.log(`Pinecone index retrieved: ${indexName}`);
+
 	// 5. Process each document in the docs array
-	for (const doc of docs) {
-		console.log(`Processing document: ${doc.metadata.source}`);
-		const txtPath = doc.metadata.source;
+	console.log(`Processing document: ${doc.metadata.source}`);
+	const txtPath = encodeURI(
+		doc.metadata.telegram.name || doc.metadata.pdf?.info?.Title || doc.metadata.source || 'file'
+	);
 
-		// const base64Images = await pdfToBase64Imgs(doc.metadata.source);
-		const base64Images = await pdfBufferToBase64Imgs(pdfBuffer);
+	// const base64Images = await pdfToBase64Imgs(doc.metadata.source);
+	const base64Images = await pdfBufferToBase64Imgs(pdfBuffer);
 
-		if (base64Images.length > 5) {
-			result.push('Document is too big, I will process only first 5 pages\n\n');
-		}
-		const reconstructedContentFromLlm = await getSummaryFromLlm(base64Images.slice(0, 5), env);
+	if (base64Images.length > 5) {
+		result.push('Document is too big, I will process only first 5 pages\n\n');
+	}
+	const reconstructedContentFromLlm = await getSummaryFromLlm(base64Images.slice(0, 5));
 
-		result.push(reconstructedContentFromLlm);
+	result.push(reconstructedContentFromLlm);
 
-		const text = `${reconstructedContentFromLlm}; 
+	const text = `${reconstructedContentFromLlm}; 
         ---
         ORIGINAL FILE CONTENT:
         ${doc.pageContent}`;
 
-		// 6. Create RecursiveCharacterTextSplitter instance
-		const textSplitter = new RecursiveCharacterTextSplitter({
-			chunkSize: 1000,
-		});
-		console.log('Splitting text into chunks...');
-		// 7. Split text into chunks (documents)
-		const chunks = await textSplitter.createDocuments([text]);
-		console.log(`Text split into ${chunks.length} chunks`);
-		console.log(
-			`Calling OpenAI's Embedding endpoint documents with ${chunks.length} text chunks ...`
-		);
-		// 8. Create OpenAI embeddings for documents
-		const embeddingsArrays = await new OpenAIEmbeddings().embedDocuments(
-			chunks.map(chunk => chunk.pageContent.replace(/\n/g, ' '))
-		);
-		console.log('Finished embedding documents');
-		console.log(`Creating ${chunks.length} vectors array with id, values, and metadata...`);
-		// 9. Create and upsert vectors in batches of 100
-		const batchSize = 100;
-		let batch = [];
-		for (let idx = 0; idx < chunks.length; idx++) {
-			const chunk = chunks[idx];
-			const vector: Vector = {
-				id: `${txtPath}_${idx}`,
-				values: embeddingsArrays[idx],
-				metadata: {
-					...chunk.metadata,
-					loc: JSON.stringify(chunk.metadata.loc),
-					pageContent: chunk.pageContent,
-					txtPath: txtPath,
+	// 6. Create RecursiveCharacterTextSplitter instance
+	const textSplitter = new RecursiveCharacterTextSplitter({
+		chunkSize: 1000,
+	});
+	console.log('Splitting text into chunks...');
+	// 7. Split text into chunks (documents)
+	const chunks = await textSplitter.createDocuments([text]);
+	console.log(`Text split into ${chunks.length} chunks`);
+	console.log(
+		`Calling OpenAI's Embedding endpoint documents with ${chunks.length} text chunks ...`
+	);
+	// 8. Create OpenAI embeddings for documents
+	const embeddingsArrays = await new OpenAIEmbeddings().embedDocuments(
+		chunks.map(chunk => chunk.pageContent.replace(/\n/g, ' '))
+	);
+	console.log('Finished embedding documents');
+	console.log(`Creating ${chunks.length} vectors array with id, values, and metadata...`);
+	// 9. Create and upsert vectors in batches of 100
+	const batchSize = 100;
+	let batch = [];
+	for (let idx = 0; idx < chunks.length; idx++) {
+		const chunk = chunks[idx];
+		const vector: Vector = {
+			id: `${txtPath}_${idx}`,
+			values: embeddingsArrays[idx],
+			metadata: {
+				...chunk.metadata,
+				loc: JSON.stringify(chunk.metadata.loc),
+				pageContent: chunk.pageContent,
+				txtPath: txtPath,
+			},
+		};
+		batch.push(vector);
+		// When batch is full or it's the last item, upsert the vectors
+		if (batch.length === batchSize || idx === chunks.length - 1) {
+			await index.upsert({
+				upsertRequest: {
+					vectors: batch,
 				},
-			};
-			batch.push(vector);
-			// When batch is full or it's the last item, upsert the vectors
-			if (batch.length === batchSize || idx === chunks.length - 1) {
-				await index.upsert({
-					upsertRequest: {
-						vectors: batch,
-					},
-				});
-				// Empty the batch
-				batch = [];
-			}
+			});
+			// Empty the batch
+			batch = [];
 		}
-		// 10. Log the number of vectors updated
-		console.log(`Pinecone index updated with ${chunks.length} vectors`);
 	}
+	// 10. Log the number of vectors updated
+	console.log(`Pinecone index updated with ${chunks.length} vectors`);
 
 	return result;
 };
 
 const pdfBufferToBase64Imgs = async (buffer: Buffer) => {
-	(await convert(buffer, { base64: false })).forEach((jpeg, index) => {
-		writeFileSync(`0-${index}.jpeg`, jpeg);
-	});
-	return await convert(buffer, { base64: true });
+	return await convertPDFBinaryDataToBase64Image(buffer);
 };
 
-const getSummaryFromLlm = async (base64Images: string[] | Uint8Array[], env: Env) => {
+const getSummaryFromLlm = async (base64Images: string[] | Uint8Array[]) => {
 	const openai = new OpenAI({
-		apiKey: env.OPENAI_API_KEY,
+		apiKey: process.env.OPENAI_API_KEY,
 	});
 
 	const response = await openai.chat.completions.create({

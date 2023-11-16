@@ -4,7 +4,7 @@ import { OpenAI } from 'langchain/llms/openai';
 import { loadQAStuffChain } from 'langchain/chains';
 import { Document } from 'langchain/document';
 import { PineconeClient } from '@pinecone-database/pinecone';
-import { Vector } from './2-updatePinecone';
+import { Vector } from './2-updatePinecone.js';
 // 2. Export the queryPineconeVectorStoreAndQueryLLM function
 export const queryPineconeVectorStoreAndQueryLLM = async (
 	client: PineconeClient,
