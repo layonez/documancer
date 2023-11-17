@@ -36,10 +36,10 @@ export const updatePinecone = async (
 	// const base64Images = await pdfToBase64Imgs(doc.metadata.source);
 	const base64Images = await pdfBufferToBase64Imgs(pdfBuffer);
 
-	if (base64Images.length > 5) {
+	if (base64Images.length > 15) {
 		reply(
 			doc.metadata.telegram.chatId,
-			'Document is too big, I will process only first 5 pages\n\n'
+			'Document is too big, I will process only first 15 pages\n\n'
 		);
 	}
 	const reconstructedContentFromLlm = await getSummaryFromLlm(
@@ -117,7 +117,7 @@ const getSummaryFromLlm = async (base64Images: string[] | Uint8Array[], chatId: 
 	});
 
 	const response = await openai.chat.completions.create({
-		model: 'gpt-3.5-turbo-1106',
+		model: 'gpt-4-vision-preview',
 		messages: [
 			{
 				role: 'user',
