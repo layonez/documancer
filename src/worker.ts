@@ -1,5 +1,5 @@
 import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
-import { PineconeClient } from '@pinecone-database/pinecone';
+import { Pinecone } from '@pinecone-database/pinecone';
 import { updatePinecone } from './2-updatePinecone.js';
 import { queryPineconeVectorStoreAndQueryLLM } from './3-queryPineconeAndQueryGPT.js';
 import { Message } from 'node-telegram-bot-api';
@@ -9,13 +9,10 @@ import { Document } from 'langchain/document';
 const indexName = 'your-pinecone-index-name';
 
 const initPinecneClient = async (pineconeEnv: string, pineconeToken: string) => {
-	const client = new PineconeClient();
-	await client.init({
+	return new Pinecone({
 		apiKey: pineconeToken,
 		environment: pineconeEnv,
 	});
-
-	return client;
 };
 
 export const processText = async (msg: Message, chatId: number) => {
@@ -26,7 +23,7 @@ export const processText = async (msg: Message, chatId: number) => {
 		process.env.PINECONE_ENVIRONMENT,
 		process.env.PINECONE_API_KEY
 	);
-	const result = await queryPineconeVectorStoreAndQueryLLM(client, indexName, msg.text);
+	const result = await queryPineconeVectorStoreAndQueryLLM(client, indexName, msg.text, chatId);
 
 	return [result];
 };

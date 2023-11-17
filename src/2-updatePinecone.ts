@@ -1,22 +1,24 @@
 import { OpenAIEmbeddings } from 'langchain/embeddings/openai';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import OpenAI from 'openai';
-// import { convert } from 'pdf-img-convert';
-import { PineconeClient, ScoredPineconeRecord, ScoredVector } from '@pinecone-database/pinecone';
+import { Pinecone, ScoredPineconeRecord } from '@pinecone-database/pinecone';
 import { convertPDFBinaryDataToBase64Image } from './utils.js';
 import type { Document } from 'langchain/document';
-import { DocumentMetadata, PdfType } from './worker.js';
+import { PdfType } from './worker.js';
 import { reply } from './index.js';
 
 export type Vector = ScoredPineconeRecord<{
 	loc: string;
 	pageContent: string;
 	txtPath: any;
+	telegramMessageId: number;
+	telegramChatId: number;
+	telegramFileId: string;
 }>;
 
 // 2. Export updatePinecone function
 export const updatePinecone = async (
-	client: PineconeClient,
+	client: Pinecone,
 	indexName: string,
 	doc: Document<PdfType>,
 	pdfBuffer: Buffer
@@ -87,16 +89,15 @@ export const updatePinecone = async (
 				loc: JSON.stringify(chunk.metadata.loc),
 				pageContent: chunk.pageContent,
 				txtPath: txtPath,
+				telegramMessageId: doc.metadata.telegram.messageId,
+				telegramChatId: doc.metadata.telegram.chatId,
+				telegramFileId: doc.metadata.telegram.id,
 			},
 		};
 		batch.push(vector);
 		// When batch is full or it's the last item, upsert the vectors
 		if (batch.length === batchSize || idx === chunks.length - 1) {
-			await index.upsert({
-				upsertRequest: {
-					vectors: batch,
-				},
-			});
+			await index.upsert(batch);
 			// Empty the batch
 			batch = [];
 		}
