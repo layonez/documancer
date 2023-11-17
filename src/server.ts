@@ -1,7 +1,7 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { testMessageWithFile } from './testData.js';
-import { processTelegramWebHook } from './index.js';
+import { processTelegramWebHook, reply } from './index.js';
 
 dotenv.config();
 console.log(process.env.TELEGRAM_API_KEY);
@@ -32,4 +32,6 @@ app.post('/', async (req: Request, res: Response) => {
 
 app.listen(port, () => {
 	console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
+
+    reply(1336951, 'new version deployed');
 });

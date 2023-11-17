@@ -28,7 +28,7 @@ export const queryPineconeVectorStoreAndQueryLLM = async (
 	});
 
 	if (queryResponse?.matches?.length) {
-		const llm = new OpenAI({});
+		const llm = new OpenAI({ modelName: 'gpt-3.5-turbo-1106', maxTokens: 1500 });
 		const chain = loadQAStuffChain(llm);
 		// 10. Extract and concatenate page content from matched documents
 		const concatenatedPageContent = queryResponse.matches
