@@ -11,6 +11,16 @@ const reply = async (apiKey: string, chatId: number, text: string) => {
 export const processTelegramWebHook = async (message: Message): Promise<Response> => {
 	const chatId = message.chat.id;
 
+	if (chatId !== 1336951) {
+		await reply(
+			process.env.TELEGRAM_API_KEY,
+			chatId,
+			'Bro, you are not authorized yet to access me'
+		);
+
+		return new Response('OK');
+	}
+
 	try {
 		const messageText = message.text;
 
